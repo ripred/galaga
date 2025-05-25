@@ -101,25 +101,20 @@ def main():
                 self.kill()
 
     class Enemy(pygame.sprite.Sprite):
-        def __init__(self, pos, image, enemy_type="shooter"):
+        def __init__(self, pos, image, enemy_type="shooter", speed=ENEMY_SPEED, shoot_factor=1.0):
             super().__init__()
             self.base_image = image
             self.image = self.base_image
             self.rect = self.image.get_rect(topleft=pos)
             self.start_pos = pygame.Vector2(pos)
             self.enemy_type = enemy_type
+            self.speed = speed
             self.diving = False
             self.dive_dir = 1
             self.angle = 0
             self.sine_phase = random.random() * 2 * math.pi
-            if enemy_type == "shooter":
-                self.shoot_prob = 0.01
-            elif enemy_type == "diver":
-                self.shoot_prob = 0.02
-            elif enemy_type == "zigzag":
-                self.shoot_prob = 0.015
-            else:
-                self.shoot_prob = 0.01
+            base_probs = {"shooter": 0.01, "diver": 0.02, "zigzag": 0.015}
+            self.shoot_prob = base_probs.get(enemy_type, 0.01) * shoot_factor
 
         def start_dive(self):
             if self.enemy_type == "diver" and not self.diving:
@@ -129,7 +124,7 @@ def main():
 
         def update(self, direction):
             if self.diving:
-                self.rect.x += self.dive_dir * ENEMY_SPEED
+                self.rect.x += self.dive_dir * self.speed
                 self.rect.y += DIVE_SPEED
                 self.angle = (self.angle + 5) % 360
                 center = self.rect.center
@@ -145,7 +140,7 @@ def main():
                     self.image = self.base_image
                     self.rect.topleft = self.start_pos
             else:
-                self.rect.x += ENEMY_SPEED * direction
+                self.rect.x += self.speed * direction
                 if self.enemy_type == "zigzag":
                     t = pygame.time.get_ticks() / 200 + self.sine_phase
                     self.rect.y = self.start_pos.y + 20 * math.sin(t)
@@ -162,23 +157,33 @@ def main():
     player = Player()
     all_sprites.add(player)
 
-    # create a symmetric formation using different ship types
-    patterns = [
-        ["shooter", "diver", "zigzag", "shooter", "shooter", "zigzag", "diver", "shooter"],
-        ["diver", "shooter", "diver", "zigzag", "zigzag", "diver", "shooter", "diver"],
-    ]
-    spacing = 80
-    start_x = (SCREEN_WIDTH - spacing * len(patterns[0])) // 2
-    for row, pattern in enumerate(patterns):
-        y = 50 + row * 40
-        for i, etype in enumerate(pattern):
-            x = start_x + i * spacing
-            sprite = enemy_images.get(etype, enemy_image)
-            enemy = Enemy((x, y), sprite, enemy_type=etype)
-            enemies.add(enemy)
-            all_sprites.add(enemy)
-
     enemy_direction = 1
+    wave = 1
+    current_dive_prob = DIVE_PROBABILITY
+
+    def spawn_wave(num):
+        nonlocal current_dive_prob, enemy_direction
+        for e in enemies:
+            e.kill()
+        current_dive_prob = DIVE_PROBABILITY + (num - 1) * 0.002
+        enemy_direction = 1
+        rows = 2 if num == 1 else 3
+        spacing = 80
+        start_x = (SCREEN_WIDTH - spacing * 8) // 2
+        speed = ENEMY_SPEED + (num - 1) * 0.5
+        shoot_factor = 1 + (num - 1) * 0.25
+        for row in range(rows):
+            y = 50 + row * 40
+            for i in range(8):
+                etype = random.choice(list(enemy_images.keys()))
+                sprite = enemy_images.get(etype, enemy_image)
+                enemy = Enemy((start_x + i * spacing, y), sprite,
+                              enemy_type=etype, speed=speed,
+                              shoot_factor=shoot_factor)
+                enemies.add(enemy)
+                all_sprites.add(enemy)
+
+    spawn_wave(wave)
     lives = 2
 
     running = True
@@ -207,7 +212,7 @@ def main():
                 enemy.rect.y += 20
 
         available = [e for e in enemies if e.enemy_type == "diver" and not e.diving]
-        if available and random.random() < DIVE_PROBABILITY:
+        if available and random.random() < current_dive_prob:
             random.choice(available).start_dive()
 
         if player.alive():
@@ -223,6 +228,9 @@ def main():
 
         hits = pygame.sprite.groupcollide(bullets, enemies, True, True)
         score += len(hits) * 10
+        if not enemies:
+            wave += 1
+            spawn_wave(wave)
 
         # Render
         screen.fill((0, 0, 0))
@@ -235,6 +243,8 @@ def main():
             screen.blit(life_image, (x, y))
         score_surf = font.render(f"Score: {score}", True, (255, 255, 255))
         screen.blit(score_surf, (10, 10))
+        wave_surf = font.render(f"Wave: {wave}", True, (255, 255, 255))
+        screen.blit(wave_surf, (SCREEN_WIDTH - wave_surf.get_width() - 10, 10))
         pygame.display.flip()
         clock.tick(60)
 

@@ -51,8 +51,8 @@ your own.
 
 - [x] Implement score tracking and on‑screen display.
 - [x] Track player lives and end the game when lives reach zero.
-- [ ] Introduce multiple waves or levels of enemies.
-- [ ] Add increasing difficulty and varied enemy behaviors.
+- [x] Introduce multiple waves or levels of enemies.
+- [x] Add increasing difficulty and varied enemy behaviors.
 
 ### Stage 4 – Polish and Quality of Life
 
