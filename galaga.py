@@ -22,6 +22,8 @@ def main():
     pygame.display.set_caption("Galaga")
 
     clock = pygame.time.Clock()
+    font = pygame.font.Font(None, 36)
+    score = 0
 
     def load_sprite(name, width, height):
         """Helper to load and scale an image from the starter kit."""
@@ -220,6 +222,7 @@ def main():
                     running = False
 
         hits = pygame.sprite.groupcollide(bullets, enemies, True, True)
+        score += len(hits) * 10
 
         # Render
         screen.fill((0, 0, 0))
@@ -230,10 +233,12 @@ def main():
             x = 10 + i * (life_image.get_width() + 10)
             y = SCREEN_HEIGHT - life_image.get_height() - 5
             screen.blit(life_image, (x, y))
+        score_surf = font.render(f"Score: {score}", True, (255, 255, 255))
+        screen.blit(score_surf, (10, 10))
         pygame.display.flip()
         clock.tick(60)
 
-    print("Game Over")
+    print(f"Game Over! Final score: {score}")
     pygame.quit()
     sys.exit()
 
