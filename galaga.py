@@ -28,6 +28,7 @@ def main():
     player_image = load_sprite("starship.svg", 40, 30)
     bullet_image = load_sprite("projectile1.svg", 5, 15)
     enemy_image = load_sprite("ufo.svg", 30, 20)
+    life_image = load_sprite("starship.svg", 30, 20)
 
     class Player(pygame.sprite.Sprite):
         def __init__(self, double=False):
@@ -194,6 +195,10 @@ def main():
         if beam_rect:
             pygame.draw.rect(screen, (0, 255, 255), beam_rect)
 
+        for i in range(lives):
+            x = 10 + i * (life_image.get_width() + 10)
+            y = SCREEN_HEIGHT - life_image.get_height() - 5
+            screen.blit(life_image, (x, y))
         pygame.display.flip()
         clock.tick(60)
 
