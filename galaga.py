@@ -43,8 +43,8 @@ def main():
     player_image = load_sprite("starship.svg", 40, 30)
     bullet_image = load_sprite("projectile1.svg", 5, 15)
     def orient_up(img):
-        """Rotate sprites so they face upward in formation."""
-        return pygame.transform.rotate(img, 90)
+        """Ensure sprites retain their original horizontal orientation."""
+        return img
 
     enemy_image = orient_up(load_sprite("ufo.svg", 30, 20))
     enemy_images = {
