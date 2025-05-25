@@ -153,15 +153,21 @@ def main():
                     self.diving = False
                     self.returning = True
                     self.dive_phase = None
-                    self.angle = 0
-                    self.image = self.base_image
+                    self.angle = 180
+                    center = self.rect.center
+                    self.image = pygame.transform.rotate(self.base_image, self.angle)
+                    self.rect = self.image.get_rect(center=center)
                     self.rect.bottom = 0
             elif self.returning:
                 target_x = self.start_pos.x + offset_x
                 target_y = self.start_pos.y
                 self.rect.x = target_x
                 self.rect.y += DIVE_SPEED
-                if self.rect.y >= target_y:
+                self.angle = max(0, self.angle - 6)
+                center = self.rect.center
+                self.image = pygame.transform.rotate(self.base_image, self.angle)
+                self.rect = self.image.get_rect(center=center)
+                if self.rect.y >= target_y and self.angle == 0:
                     self.rect.topleft = (target_x, target_y)
                     self.returning = False
             else:
