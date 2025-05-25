@@ -3,6 +3,7 @@ import os
 import sys
 import pygame
 import random
+import math
 
 # Game constants
 SCREEN_WIDTH = 800
@@ -10,11 +11,9 @@ SCREEN_HEIGHT = 600
 PLAYER_SPEED = 5
 BULLET_SPEED = -7
 ENEMY_SPEED = 2
-CAPTURE_SPEED = 2
 DIVE_SPEED = 3
 DIVE_PROBABILITY = 0.005
 ENEMY_BULLET_SPEED = 4
-CAPTURE_ALIGN_DISTANCE = 30
 
 pygame.init()
 
@@ -30,23 +29,22 @@ def main():
         image = pygame.image.load(path).convert_alpha()
         return pygame.transform.smoothscale(image, (width, height))
 
-    def load_sprites_from_dir(folder, width, height):
-        """Load and scale all image files in ``folder``."""
-        sprites = []
-        for fname in sorted(os.listdir(folder)):
-            if fname.lower().endswith((".png", ".svg")):
-                img_path = os.path.join(folder, fname)
-                img = pygame.image.load(img_path).convert_alpha()
-                sprites.append(pygame.transform.smoothscale(img, (width, height)))
-        return sprites
+
+    def load_pack_sprite(fname, width, height):
+        """Load a spaceship sprite from the AntuZ pack."""
+        path = os.path.join("SpaceShipsPack-AntuZ", "SpaceShips", fname)
+        img = pygame.image.load(path).convert_alpha()
+        return pygame.transform.smoothscale(img, (width, height))
 
     # Sprite setup using images
     player_image = load_sprite("starship.svg", 40, 30)
     bullet_image = load_sprite("projectile1.svg", 5, 15)
     enemy_image = load_sprite("ufo.svg", 30, 20)
-    enemy_sprites = load_sprites_from_dir(
-        os.path.join("SpaceShipsPack-AntuZ", "SpaceShips"), 30, 20
-    )
+    enemy_images = {
+        "shooter": load_pack_sprite("A-10.png", 30, 20),
+        "diver": load_pack_sprite("B-08.png", 30, 20),
+        "zigzag": load_pack_sprite("C-07.png", 30, 20),
+    }
     enemy_bullet_image = load_sprite("projectile2.svg", 5, 15)
     life_image = load_sprite("starship.svg", 30, 20)
 
@@ -101,104 +99,86 @@ def main():
                 self.kill()
 
     class Enemy(pygame.sprite.Sprite):
-        def __init__(self, pos, image, is_boss=False):
+        def __init__(self, pos, image, enemy_type="shooter"):
             super().__init__()
             self.base_image = image
             self.image = self.base_image
             self.rect = self.image.get_rect(topleft=pos)
             self.start_pos = pygame.Vector2(pos)
-            self.is_boss = is_boss
-            self.capturing = False
-            self.capture_stationary = False
-            self.capture_timer = 0
-            self.has_player = False
+            self.enemy_type = enemy_type
             self.diving = False
             self.dive_dir = 1
             self.angle = 0
+            self.sine_phase = random.random() * 2 * math.pi
+            if enemy_type == "shooter":
+                self.shoot_prob = 0.01
+            elif enemy_type == "diver":
+                self.shoot_prob = 0.02
+            elif enemy_type == "zigzag":
+                self.shoot_prob = 0.015
+            else:
+                self.shoot_prob = 0.01
 
         def start_dive(self):
-            if not self.capturing and not self.diving:
+            if self.enemy_type == "diver" and not self.diving:
                 self.diving = True
                 self.dive_dir = 1 if self.rect.centerx < player.rect.centerx else -1
                 self.angle = 0
 
         def update(self, direction):
-            if self.capturing:
-                if self.capture_stationary:
-                    # stay still while beam is active
-                    self.capture_timer += 1
-                    if self.capture_timer > 120:
-                        self.capturing = False
-                        self.capture_stationary = False
-                        self.capture_timer = 0
-                        if self.rect.y > self.start_pos.y:
-                            self.rect.topleft = self.start_pos
-                elif self.has_player:
-                    # return to start position with captured ship
-                    if self.rect.y > self.start_pos.y:
-                        self.rect.y -= CAPTURE_SPEED
-                    else:
-                        self.capturing = False
-                else:
-                    self.rect.y += CAPTURE_SPEED
-            elif self.diving:
+            if self.diving:
                 self.rect.x += self.dive_dir * ENEMY_SPEED
                 self.rect.y += DIVE_SPEED
                 self.angle = (self.angle + 5) % 360
                 center = self.rect.center
                 self.image = pygame.transform.rotate(self.base_image, self.angle)
                 self.rect = self.image.get_rect(center=center)
-                if random.random() < 0.02:
+                if random.random() < self.shoot_prob:
                     bullet = EnemyBullet(self.rect.midbottom)
                     all_sprites.add(bullet)
                     enemy_bullets.add(bullet)
-                if self.has_player and self.rect.y > SCREEN_HEIGHT // 3 and not self.capturing:
-                    self.diving = False
-                    self.capturing = True
-                    self.capture_stationary = True
-                    self.angle = 0
-                    self.image = self.base_image
-                elif self.rect.top > SCREEN_HEIGHT:
+                if self.rect.top > SCREEN_HEIGHT:
                     self.diving = False
                     self.angle = 0
                     self.image = self.base_image
                     self.rect.topleft = self.start_pos
             else:
                 self.rect.x += ENEMY_SPEED * direction
+                if self.enemy_type == "zigzag":
+                    t = pygame.time.get_ticks() / 200 + self.sine_phase
+                    self.rect.y = self.start_pos.y + 20 * math.sin(t)
+                if random.random() < self.shoot_prob:
+                    bullet = EnemyBullet(self.rect.midbottom)
+                    all_sprites.add(bullet)
+                    enemy_bullets.add(bullet)
 
-    class FreedShip(pygame.sprite.Sprite):
-        """Ship released from an enemy after being captured."""
-        def __init__(self, pos):
-            super().__init__()
-            self.image = player_image
-            self.rect = self.image.get_rect(midtop=pos)
-
-        def update(self):
-            self.rect.y += CAPTURE_SPEED
-            if self.rect.bottom >= SCREEN_HEIGHT - 10:
-                # Join the player's ship and enable double shooting
-                player.double = True
-                self.kill()
 
     # Groups
     all_sprites = pygame.sprite.Group()
     bullets = pygame.sprite.Group()
     enemy_bullets = pygame.sprite.Group()
     enemies = pygame.sprite.Group()
-    freed_ships = pygame.sprite.Group()
 
     player = Player()
     all_sprites.add(player)
 
-    # create a simple row of enemies using the new sprite pack
-    for i in range(8):
-        sprite = random.choice(enemy_sprites) if enemy_sprites else enemy_image
-        enemy = Enemy((80 * i + 50, 50), sprite, is_boss=(i == 0))
-        enemies.add(enemy)
-        all_sprites.add(enemy)
+    # create a symmetric formation using different ship types
+    patterns = [
+        ["shooter", "diver", "zigzag", "shooter", "shooter", "zigzag", "diver", "shooter"],
+        ["diver", "shooter", "diver", "zigzag", "zigzag", "diver", "shooter", "diver"],
+    ]
+    spacing = 80
+    start_x = (SCREEN_WIDTH - spacing * len(patterns[0])) // 2
+    for row, pattern in enumerate(patterns):
+        y = 50 + row * 40
+        for i, etype in enumerate(pattern):
+            x = start_x + i * spacing
+            sprite = enemy_images.get(etype, enemy_image)
+            enemy = Enemy((x, y), sprite, enemy_type=etype)
+            enemies.add(enemy)
+            all_sprites.add(enemy)
 
     enemy_direction = 1
-    boss = next(e for e in enemies if e.is_boss)
     lives = 2
 
     running = True
@@ -214,7 +194,6 @@ def main():
             player.update(keys)
         bullets.update()
         enemy_bullets.update()
-        freed_ships.update()
 
         # Update enemies
         move_down = False
@@ -227,33 +206,9 @@ def main():
             for enemy in enemies:
                 enemy.rect.y += 20
 
-        available = [e for e in enemies if not e.diving and not e.capturing]
+        available = [e for e in enemies if e.enemy_type == "diver" and not e.diving]
         if available and random.random() < DIVE_PROBABILITY:
             random.choice(available).start_dive()
-
-        # Boss capture behaviour when aligned at the top
-        if boss.is_boss and not boss.capturing and not boss.has_player:
-            aligned = abs(boss.rect.centerx - player.rect.centerx) < CAPTURE_ALIGN_DISTANCE
-            if aligned and boss.rect.y <= boss.start_pos.y:
-                boss.capturing = True
-
-        beam_rects = []
-        for enemy in enemies:
-            if enemy.capturing:
-                beam = pygame.Rect(enemy.rect.centerx - 10, enemy.rect.bottom,
-                                   20, SCREEN_HEIGHT - enemy.rect.bottom)
-                beam_rects.append(beam)
-                if player.alive() and beam.colliderect(player.rect):
-                    if not enemy.has_player:
-                        enemy.has_player = True
-                    lives -= 1
-                    all_sprites.remove(player)
-                    player.kill()
-                    if lives > 0:
-                        player = Player()
-                        all_sprites.add(player)
-                    else:
-                        running = False
 
         if player.alive():
             if pygame.sprite.spritecollide(player, enemy_bullets, True):
@@ -266,30 +221,12 @@ def main():
                 else:
                     running = False
 
-        hits = pygame.sprite.groupcollide(bullets, enemies, True, False)
-        for hit_enemy in hits.values():
-            for enemy in hit_enemy:
-                if enemy.has_player:
-                    freed = FreedShip(enemy.rect.midbottom)
-                    all_sprites.add(freed)
-                    freed_ships.add(freed)
-                enemies.remove(enemy)
-                all_sprites.remove(enemy)
+        hits = pygame.sprite.groupcollide(bullets, enemies, True, True)
 
         # Render
         screen.fill((0, 0, 0))
         for sprite in all_sprites:
             screen.blit(sprite.image, sprite.rect)
-
-        # Draw captured ship if any
-        for enemy in enemies:
-            if enemy.has_player:
-                captured_pos = (enemy.rect.centerx - player_image.get_width() // 2,
-                                enemy.rect.bottom)
-                screen.blit(player_image, captured_pos)
-
-        for beam_rect in beam_rects:
-            pygame.draw.rect(screen, (0, 255, 255), beam_rect)
 
         for i in range(lives):
             x = 10 + i * (life_image.get_width() + 10)
