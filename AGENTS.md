@@ -50,7 +50,7 @@ your own.
 ### Stage 3 – Core Game Features
 
 - [ ] Implement score tracking and on‑screen display.
-- [ ] Track player lives and end the game when lives reach zero.
+- [x] Track player lives and end the game when lives reach zero.
 - [ ] Introduce multiple waves or levels of enemies.
 - [ ] Add increasing difficulty and varied enemy behaviors.
 
