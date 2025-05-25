@@ -13,6 +13,7 @@ CAPTURE_SPEED = 2
 DIVE_SPEED = 3
 DIVE_PROBABILITY = 0.005
 ENEMY_BULLET_SPEED = 4
+CAPTURE_ALIGN_DISTANCE = 30
 
 pygame.init()
 
@@ -217,7 +218,8 @@ def main():
 
         # Boss capture behaviour when aligned at the top
         if boss.is_boss and not boss.capturing and not boss.has_player:
-            if abs(boss.rect.centerx - player.rect.centerx) < 5 and boss.rect.y <= boss.start_pos.y:
+            aligned = abs(boss.rect.centerx - player.rect.centerx) < CAPTURE_ALIGN_DISTANCE
+            if aligned and boss.rect.y <= boss.start_pos.y:
                 boss.capturing = True
 
         beam_rects = []
