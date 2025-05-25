@@ -7,6 +7,7 @@ SCREEN_HEIGHT = 600
 PLAYER_SPEED = 5
 BULLET_SPEED = -7
 ENEMY_SPEED = 2
+STARTING_LIVES = 3
 
 pygame.init()
 
@@ -25,6 +26,10 @@ def main():
     bullet_image = pygame.Surface((5, 15))
     bullet_image.fill((255, 255, 0))
     bullets = []
+
+    # Lives setup
+    lives = STARTING_LIVES
+    life_image = pygame.transform.scale(player_image, (30, 22))
 
     enemy_image = pygame.Surface((30, 20))
     enemy_image.fill((255, 0, 0))
@@ -74,6 +79,15 @@ def main():
             for enemy in enemies:
                 enemy.y += 20
 
+        # Check for collisions between enemies and the player
+        for enemy in enemies:
+            if enemy.colliderect(player_rect):
+                lives -= 1
+                player_rect.midbottom = (SCREEN_WIDTH // 2, SCREEN_HEIGHT - 10)
+                if lives <= 0:
+                    running = False
+                break
+
         # Render
         screen.fill((0, 0, 0))
         screen.blit(player_image, player_rect)
@@ -81,6 +95,12 @@ def main():
             screen.blit(bullet_image, bullet)
         for enemy in enemies:
             screen.blit(enemy_image, enemy)
+
+        # Draw remaining lives (excluding the active ship)
+        for i in range(lives - 1):
+            rect = life_image.get_rect()
+            rect.bottomleft = (10 + i * (rect.width + 10), SCREEN_HEIGHT - 10)
+            screen.blit(life_image, rect)
 
         pygame.display.flip()
         clock.tick(60)
