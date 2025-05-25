@@ -42,11 +42,15 @@ def main():
     # Sprite setup using images
     player_image = load_sprite("starship.svg", 40, 30)
     bullet_image = load_sprite("projectile1.svg", 5, 15)
-    enemy_image = load_sprite("ufo.svg", 30, 20)
+    def orient_up(img):
+        """Rotate sprites so they face upward in formation."""
+        return pygame.transform.rotate(img, 90)
+
+    enemy_image = orient_up(load_sprite("ufo.svg", 30, 20))
     enemy_images = {
-        "shooter": load_pack_sprite("A-10.png", 30, 20),
-        "diver": load_pack_sprite("B-08.png", 30, 20),
-        "zigzag": load_pack_sprite("C-07.png", 30, 20),
+        "shooter": orient_up(load_pack_sprite("A-10.png", 30, 20)),
+        "diver": orient_up(load_pack_sprite("B-08.png", 30, 20)),
+        "zigzag": orient_up(load_pack_sprite("C-07.png", 30, 20)),
     }
     enemy_bullet_image = load_sprite("projectile2.svg", 5, 15)
     life_image = load_sprite("starship.svg", 30, 20)
@@ -105,48 +109,70 @@ def main():
         def __init__(self, pos, image, enemy_type="shooter", speed=ENEMY_SPEED, shoot_factor=1.0):
             super().__init__()
             self.base_image = image
+            self.down_image = pygame.transform.rotate(self.base_image, 180)
             self.image = self.base_image
             self.rect = self.image.get_rect(topleft=pos)
             self.start_pos = pygame.Vector2(pos)
             self.enemy_type = enemy_type
             self.speed = min(speed, MAX_ENEMY_SPEED)
             self.diving = False
+            self.returning = False
             self.dive_dir = 1
+            self.dive_phase = None
             self.angle = 0
             self.sine_phase = random.random() * 2 * math.pi
             base_probs = {"shooter": 0.01, "diver": 0.02, "zigzag": 0.015}
             self.shoot_prob = base_probs.get(enemy_type, 0.01) * shoot_factor
 
         def start_dive(self):
-            if self.enemy_type == "diver" and not self.diving:
+            if self.enemy_type == "diver" and not self.diving and not self.returning:
                 self.diving = True
+                self.dive_phase = "ascend"
                 self.dive_dir = 1 if self.rect.centerx < player.rect.centerx else -1
                 self.angle = 0
+                self.dive_peak_y = self.rect.y - 40
 
-        def update(self, direction):
+        def update(self, direction, offset_x):
             if self.diving:
-                self.rect.x += self.dive_dir * self.speed
-                self.rect.y += DIVE_SPEED
-                self.angle = (self.angle + 5) % 360
+                if self.dive_phase == "ascend":
+                    self.rect.y -= DIVE_SPEED
+                    self.angle = min(180, self.angle + 6)
+                    if self.rect.y <= self.dive_peak_y:
+                        self.dive_phase = "dive"
+                else:
+                    self.rect.x += self.dive_dir * self.speed
+                    self.rect.y += DIVE_SPEED
                 center = self.rect.center
                 self.image = pygame.transform.rotate(self.base_image, self.angle)
                 self.rect = self.image.get_rect(center=center)
-                if random.random() < self.shoot_prob:
+                if random.random() < self.shoot_prob and self.dive_phase == "dive":
                     bullet = EnemyBullet(self.rect.midbottom)
                     all_sprites.add(bullet)
                     enemy_bullets.add(bullet)
                 if self.rect.top > SCREEN_HEIGHT:
                     self.diving = False
+                    self.returning = True
+                    self.dive_phase = None
                     self.angle = 0
                     self.image = self.base_image
-                    self.rect.topleft = self.start_pos
+                    self.rect.bottom = 0
+            elif self.returning:
+                target_x = self.start_pos.x + offset_x
+                target_y = self.start_pos.y
+                self.rect.x = target_x
+                self.rect.y += DIVE_SPEED
+                if self.rect.y >= target_y:
+                    self.rect.topleft = (target_x, target_y)
+                    self.returning = False
             else:
-                self.rect.x += self.speed * direction
+                self.rect.x = self.start_pos.x + offset_x
                 if self.enemy_type == "zigzag":
                     t = pygame.time.get_ticks() / 200 + self.sine_phase
                     self.rect.y = self.start_pos.y + 20 * math.sin(t)
-                # Enemies in formation should not shoot; only those that have
-                # left formation (diving/attacking) can fire at the player.
+                else:
+                    self.rect.y = self.start_pos.y
+                # Enemies in formation remain facing up
+                self.image = self.base_image
 
 
     # Groups
@@ -159,19 +185,23 @@ def main():
     all_sprites.add(player)
 
     enemy_direction = 1
+    formation_offset_x = 0
+    formation_speed = ENEMY_SPEED
     wave = 1
     current_dive_prob = DIVE_PROBABILITY
 
     def spawn_wave(num):
-        nonlocal current_dive_prob, enemy_direction
+        nonlocal current_dive_prob, enemy_direction, formation_offset_x, formation_speed
         for e in enemies:
             e.kill()
         current_dive_prob = DIVE_PROBABILITY + (num - 1) * 0.002
         enemy_direction = 1
+        formation_offset_x = 0
         rows = 2 if num == 1 else 3
         spacing = 80
         start_x = (SCREEN_WIDTH - spacing * 8) // 2
         speed = min(ENEMY_SPEED + (num - 1) * 0.5, MAX_ENEMY_SPEED)
+        formation_speed = speed
         shoot_factor = 1 + (num - 1) * 0.25
         for row in range(rows):
             y = 50 + row * 40
@@ -202,22 +232,21 @@ def main():
         enemy_bullets.update()
 
         # Update enemies
+        formation_offset_x += formation_speed * enemy_direction
         move_down = False
         for enemy in enemies:
-            enemy.update(enemy_direction)
-            if not enemy.diving and enemy.rect.top > SCREEN_HEIGHT:
-                enemy.rect.topleft = enemy.start_pos
-                continue
-            if enemy.rect.right > SCREEN_WIDTH or enemy.rect.left < 0:
-                move_down = True
+            enemy.update(enemy_direction, formation_offset_x)
+            if not enemy.diving and not enemy.returning:
+                if enemy.rect.right > SCREEN_WIDTH or enemy.rect.left < 0:
+                    move_down = True
         if move_down:
             enemy_direction *= -1
             for enemy in enemies:
-                enemy.rect.y += 20
+                enemy.start_pos.y += 20
 
         available = [
             e for e in enemies
-            if e.enemy_type == "diver" and not e.diving
+            if e.enemy_type == "diver" and not e.diving and not e.returning
         ]
         if available and random.random() < current_dive_prob:
             random.choice(available).start_dive()
