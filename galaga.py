@@ -10,7 +10,9 @@ SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 PLAYER_SPEED = 5
 BULLET_SPEED = -7
+DIVE_COOLDOWN_FRAMES = 120
 ENEMY_SPEED = 2
+MAX_ENEMY_SPEED = 5
 DIVE_SPEED = 3
 DIVE_PROBABILITY = 0.005
 ENEMY_BULLET_SPEED = 4
@@ -108,13 +110,14 @@ def main():
             self.rect = self.image.get_rect(topleft=pos)
             self.start_pos = pygame.Vector2(pos)
             self.enemy_type = enemy_type
-            self.speed = speed
+            self.speed = min(speed, MAX_ENEMY_SPEED)
             self.diving = False
             self.dive_dir = 1
             self.angle = 0
             self.sine_phase = random.random() * 2 * math.pi
             base_probs = {"shooter": 0.01, "diver": 0.02, "zigzag": 0.015}
             self.shoot_prob = base_probs.get(enemy_type, 0.01) * shoot_factor
+            self.cooldown = 0
 
         def start_dive(self):
             if self.enemy_type == "diver" and not self.diving:
@@ -139,7 +142,10 @@ def main():
                     self.angle = 0
                     self.image = self.base_image
                     self.rect.topleft = self.start_pos
+                    self.cooldown = DIVE_COOLDOWN_FRAMES
             else:
+                if self.cooldown > 0:
+                    self.cooldown -= 1
                 self.rect.x += self.speed * direction
                 if self.enemy_type == "zigzag":
                     t = pygame.time.get_ticks() / 200 + self.sine_phase
@@ -170,7 +176,7 @@ def main():
         rows = 2 if num == 1 else 3
         spacing = 80
         start_x = (SCREEN_WIDTH - spacing * 8) // 2
-        speed = ENEMY_SPEED + (num - 1) * 0.5
+        speed = min(ENEMY_SPEED + (num - 1) * 0.5, MAX_ENEMY_SPEED)
         shoot_factor = 1 + (num - 1) * 0.25
         for row in range(rows):
             y = 50 + row * 40
@@ -204,6 +210,9 @@ def main():
         move_down = False
         for enemy in enemies:
             enemy.update(enemy_direction)
+            if not enemy.diving and enemy.rect.top > SCREEN_HEIGHT:
+                enemy.kill()
+                continue
             if enemy.rect.right > SCREEN_WIDTH or enemy.rect.left < 0:
                 move_down = True
         if move_down:
@@ -211,7 +220,10 @@ def main():
             for enemy in enemies:
                 enemy.rect.y += 20
 
-        available = [e for e in enemies if e.enemy_type == "diver" and not e.diving]
+        available = [
+            e for e in enemies
+            if e.enemy_type == "diver" and not e.diving and e.cooldown <= 0
+        ]
         if available and random.random() < current_dive_prob:
             random.choice(available).start_dive()
 
