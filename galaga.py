@@ -147,10 +147,8 @@ def main():
                 if self.enemy_type == "zigzag":
                     t = pygame.time.get_ticks() / 200 + self.sine_phase
                     self.rect.y = self.start_pos.y + 20 * math.sin(t)
-                if random.random() < self.shoot_prob:
-                    bullet = EnemyBullet(self.rect.midbottom)
-                    all_sprites.add(bullet)
-                    enemy_bullets.add(bullet)
+                # Enemies in formation should not shoot; only those that have
+                # left formation (diving/attacking) can fire at the player.
 
 
     # Groups
