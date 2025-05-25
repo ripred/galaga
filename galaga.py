@@ -8,6 +8,7 @@ SCREEN_HEIGHT = 600
 PLAYER_SPEED = 5
 BULLET_SPEED = -7
 ENEMY_SPEED = 2
+CAPTURE_SPEED = 2
 
 pygame.init()
 
@@ -29,11 +30,12 @@ def main():
     enemy_image = load_sprite("ufo.svg", 30, 20)
 
     class Player(pygame.sprite.Sprite):
-        def __init__(self):
+        def __init__(self, double=False):
             super().__init__()
             self.image = player_image
             self.rect = self.image.get_rect()
             self.rect.midbottom = (SCREEN_WIDTH // 2, SCREEN_HEIGHT - 10)
+            self.double = double
 
         def update(self, keys):
             if keys[pygame.K_LEFT]:
@@ -43,9 +45,17 @@ def main():
             self.rect.x = max(0, min(self.rect.x, SCREEN_WIDTH - self.rect.width))
 
         def shoot(self):
-            bullet = Bullet(self.rect.midtop)
-            all_sprites.add(bullet)
-            bullets.add(bullet)
+            if self.double:
+                left = self.rect.midtop[0] - 10
+                right = self.rect.midtop[0] + 10
+                for x in (left, right):
+                    bullet = Bullet((x, self.rect.top))
+                    all_sprites.add(bullet)
+                    bullets.add(bullet)
+            else:
+                bullet = Bullet(self.rect.midtop)
+                all_sprites.add(bullet)
+                bullets.add(bullet)
 
     class Bullet(pygame.sprite.Sprite):
         def __init__(self, pos):
@@ -59,29 +69,60 @@ def main():
                 self.kill()
 
     class Enemy(pygame.sprite.Sprite):
-        def __init__(self, pos):
+        def __init__(self, pos, is_boss=False):
             super().__init__()
             self.image = enemy_image
             self.rect = self.image.get_rect(topleft=pos)
+            self.start_pos = pygame.Vector2(pos)
+            self.is_boss = is_boss
+            self.capturing = False
+            self.has_player = False
 
         def update(self, direction):
-            self.rect.x += ENEMY_SPEED * direction
+            if self.capturing:
+                if self.has_player:
+                    # return to start position with captured ship
+                    if self.rect.y > self.start_pos.y:
+                        self.rect.y -= CAPTURE_SPEED
+                    else:
+                        self.capturing = False
+                else:
+                    self.rect.y += CAPTURE_SPEED
+            else:
+                self.rect.x += ENEMY_SPEED * direction
+
+    class FreedShip(pygame.sprite.Sprite):
+        """Ship released from an enemy after being captured."""
+        def __init__(self, pos):
+            super().__init__()
+            self.image = player_image
+            self.rect = self.image.get_rect(midtop=pos)
+
+        def update(self):
+            self.rect.y += CAPTURE_SPEED
+            if self.rect.bottom >= SCREEN_HEIGHT - 10:
+                # Join the player's ship and enable double shooting
+                player.double = True
+                self.kill()
 
     # Groups
     all_sprites = pygame.sprite.Group()
     bullets = pygame.sprite.Group()
     enemies = pygame.sprite.Group()
+    freed_ships = pygame.sprite.Group()
 
     player = Player()
     all_sprites.add(player)
 
-    # create a simple row of enemies
+    # create a simple row of enemies (first enemy acts as a boss)
     for i in range(8):
-        enemy = Enemy((80 * i + 50, 50))
+        enemy = Enemy((80 * i + 50, 50), is_boss=(i == 0))
         enemies.add(enemy)
         all_sprites.add(enemy)
 
     enemy_direction = 1
+    boss = next(e for e in enemies if e.is_boss)
+    lives = 2
 
     running = True
     while running:
@@ -92,8 +133,10 @@ def main():
                 player.shoot()
 
         keys = pygame.key.get_pressed()
-        player.update(keys)
+        if player.alive():
+            player.update(keys)
         bullets.update()
+        freed_ships.update()
 
         # Update enemies
         move_down = False
@@ -106,16 +149,55 @@ def main():
             for enemy in enemies:
                 enemy.rect.y += 20
 
-        pygame.sprite.groupcollide(bullets, enemies, True, True)
+        # Boss capture behaviour
+        if boss.is_boss and not boss.capturing and not boss.has_player:
+            if abs(boss.rect.centerx - player.rect.centerx) < 5 and boss.rect.y <= boss.start_pos.y:
+                boss.capturing = True
+
+        beam_rect = None
+        if boss.capturing and not boss.has_player:
+            beam_rect = pygame.Rect(boss.rect.centerx - 10, boss.rect.bottom,
+                                    20, SCREEN_HEIGHT - boss.rect.bottom)
+            if player.alive() and beam_rect.colliderect(player.rect):
+                boss.has_player = True
+                lives -= 1
+                all_sprites.remove(player)
+                player.kill()
+                if lives > 0:
+                    player = Player()
+                    all_sprites.add(player)
+                else:
+                    running = False
+
+        hits = pygame.sprite.groupcollide(bullets, enemies, True, False)
+        for hit_enemy in hits.values():
+            for enemy in hit_enemy:
+                if enemy.has_player:
+                    freed = FreedShip(enemy.rect.midbottom)
+                    all_sprites.add(freed)
+                    freed_ships.add(freed)
+                enemies.remove(enemy)
+                all_sprites.remove(enemy)
 
         # Render
         screen.fill((0, 0, 0))
         for sprite in all_sprites:
             screen.blit(sprite.image, sprite.rect)
 
+        # Draw captured ship if any
+        for enemy in enemies:
+            if enemy.has_player:
+                captured_pos = (enemy.rect.centerx - player_image.get_width() // 2,
+                                enemy.rect.bottom)
+                screen.blit(player_image, captured_pos)
+
+        if beam_rect:
+            pygame.draw.rect(screen, (0, 255, 255), beam_rect)
+
         pygame.display.flip()
         clock.tick(60)
 
+    print("Game Over")
     pygame.quit()
     sys.exit()
 
