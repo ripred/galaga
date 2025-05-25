@@ -238,11 +238,13 @@ def main():
         enemy_bullets.update()
 
         # Update enemies
-        formation_offset_x += formation_speed * enemy_direction
+        moving_enemies = [e for e in enemies if not e.diving and not e.returning]
+        if moving_enemies:
+            formation_offset_x += formation_speed * enemy_direction
         move_down = False
         for enemy in enemies:
             enemy.update(enemy_direction, formation_offset_x)
-            if not enemy.diving and not enemy.returning:
+            if enemy in moving_enemies:
                 if enemy.rect.right > SCREEN_WIDTH or enemy.rect.left < 0:
                     move_down = True
         if move_down:
