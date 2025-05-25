@@ -25,15 +25,28 @@ def main():
     clock = pygame.time.Clock()
 
     def load_sprite(name, width, height):
-        """Helper to load and scale images from the sprite folder."""
+        """Helper to load and scale an image from the starter kit."""
         path = os.path.join("space_starter_kit", name)
         image = pygame.image.load(path).convert_alpha()
         return pygame.transform.smoothscale(image, (width, height))
+
+    def load_sprites_from_dir(folder, width, height):
+        """Load and scale all image files in ``folder``."""
+        sprites = []
+        for fname in sorted(os.listdir(folder)):
+            if fname.lower().endswith((".png", ".svg")):
+                img_path = os.path.join(folder, fname)
+                img = pygame.image.load(img_path).convert_alpha()
+                sprites.append(pygame.transform.smoothscale(img, (width, height)))
+        return sprites
 
     # Sprite setup using images
     player_image = load_sprite("starship.svg", 40, 30)
     bullet_image = load_sprite("projectile1.svg", 5, 15)
     enemy_image = load_sprite("ufo.svg", 30, 20)
+    enemy_sprites = load_sprites_from_dir(
+        os.path.join("SpaceShipsPack-AntuZ", "SpaceShips"), 30, 20
+    )
     enemy_bullet_image = load_sprite("projectile2.svg", 5, 15)
     life_image = load_sprite("starship.svg", 30, 20)
 
@@ -88,9 +101,9 @@ def main():
                 self.kill()
 
     class Enemy(pygame.sprite.Sprite):
-        def __init__(self, pos, is_boss=False):
+        def __init__(self, pos, image, is_boss=False):
             super().__init__()
-            self.base_image = enemy_image
+            self.base_image = image
             self.image = self.base_image
             self.rect = self.image.get_rect(topleft=pos)
             self.start_pos = pygame.Vector2(pos)
@@ -177,9 +190,10 @@ def main():
     player = Player()
     all_sprites.add(player)
 
-    # create a simple row of enemies (first enemy acts as a boss)
+    # create a simple row of enemies using the new sprite pack
     for i in range(8):
-        enemy = Enemy((80 * i + 50, 50), is_boss=(i == 0))
+        sprite = random.choice(enemy_sprites) if enemy_sprites else enemy_image
+        enemy = Enemy((80 * i + 50, 50), sprite, is_boss=(i == 0))
         enemies.add(enemy)
         all_sprites.add(enemy)
 
