@@ -1,5 +1,9 @@
 # Galaga Clone
 
+[![License](https://flat.badgen.net/github/license/ripred/galaga)](https://github.com/ripred/galaga/blob/main/LICENSE)
+[![Stars](https://flat.badgen.net/github/stars/ripred/galaga)](https://github.com/ripred/galaga/stargazers)
+[![Forks](https://flat.badgen.net/github/forks/ripred/galaga)](https://github.com/ripred/galaga/network/members)
+
 This simple clone of the classic Galaga arcade game uses sprite assets found in
 `space_starter_kit`. Additional spaceship graphics from `SpaceShipsPack-AntuZ`
 are loaded for the enemy fleet, providing more variety. This version tracks your
